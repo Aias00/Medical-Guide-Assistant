@@ -1,5 +1,3 @@
-
-
 import React, { useRef, useState } from 'react';
 import { Camera, Upload, X, File as FileIcon, Loader2, Plus, Zap } from 'lucide-react';
 import { Language } from '../types';
@@ -108,6 +106,7 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
     const readyFiles = stagedFiles.filter(f => f.status === 'ready' && f.base64Data);
     if (readyFiles.length > 0) {
       onAnalyze(readyFiles.map(f => f.base64Data!), runInBackground);
+      setStagedFiles([]); // Clear staged files after starting
     }
   };
 

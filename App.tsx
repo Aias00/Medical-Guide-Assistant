@@ -139,6 +139,9 @@ const App: React.FC = () => {
       setResult(null);
       setError(null);
       // We do NOT set global 'loading' state in background mode
+      
+      // Clear inputs for fresh start
+      setContext({ age: '', gender: '', condition: '' });
     } else {
       // Foreground mode: standard loading state
       setImages(previewImages);
@@ -151,7 +154,7 @@ const App: React.FC = () => {
     const performAnalysis = async () => {
       try {
         let data: AnalysisResult;
-        // Pass current context (closure captures the value at start time)
+        // Pass current context (closure captures the value at start time, safe even if context state resets)
         const currentContext = { ...context };
         
         if (provider === 'openai') {
