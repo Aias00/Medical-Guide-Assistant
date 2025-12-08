@@ -1,3 +1,4 @@
+
 export const translations = {
   zh: {
     appTitle: "家庭健康助手",
@@ -21,7 +22,7 @@ export const translations = {
     clearHistory: "清空记录",
     confirmClear: "确定要清空所有历史记录吗？",
     loadingTitle: "正在智能分析...",
-    loadingSubtitle: "Gemini 3 Pro 正在识别关键信息并翻译为通俗语言",
+    loadingSubtitle: "{model} 正在识别关键信息并翻译为通俗语言",
     errorTitle: "分析遇到问题",
     errorGeneric: "分析失败，请确保图片清晰，或稍后重试。",
     retry: "重新尝试",
@@ -38,6 +39,11 @@ export const translations = {
     medicationLabel: "药品",
     unknownLabel: "未知药品",
     healthReportLabel: "健康检查报告",
+    
+    // Provider
+    provider: "模型",
+    gemini: "Gemini 3 Pro",
+    openai: "GPT-4o",
 
     // FileUpload
     uploadTitle: "点击上传 / 拍摄",
@@ -90,7 +96,7 @@ export const translations = {
     clearHistory: "Clear All",
     confirmClear: "Are you sure you want to clear all history?",
     loadingTitle: "Analyzing...",
-    loadingSubtitle: "Gemini 3 Pro is identifying key information and translating it for you.",
+    loadingSubtitle: "{model} is identifying key information and translating it for you.",
     errorTitle: "Analysis Failed",
     errorGeneric: "Analysis failed. Please ensure images are clear or try again later.",
     retry: "Try Again",
@@ -107,6 +113,11 @@ export const translations = {
     medicationLabel: "Meds",
     unknownLabel: "Unknown Meds",
     healthReportLabel: "Health Report",
+
+    // Provider
+    provider: "Model",
+    gemini: "Gemini 3 Pro",
+    openai: "GPT-4o",
 
     // FileUpload
     uploadTitle: "Upload / Capture",

@@ -1,8 +1,8 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { analyzeMedicalImage } from './services/geminiService';
-import { AnalysisResult, AnalysisType, PatientContext, HistoryItem, Language } from './types';
+import { analyzeMedicalImageOpenAI } from './services/openaiService';
+import { AnalysisResult, AnalysisType, PatientContext, HistoryItem, Language, AiProvider } from './types';
 import FileUpload from './components/FileUpload';
 import IndicatorCard from './components/IndicatorCard';
 import MedicationCard from './components/MedicationCard';
@@ -33,6 +33,9 @@ const App: React.FC = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('zh');
+  
+  // Configuration driven provider
+  const provider: AiProvider = process.env.AI_PROVIDER === 'openai' ? 'openai' : 'gemini';
   
   // Basic Context State
   const [context, setContext] = useState<PatientContext>({ age: '', gender: '', condition: '' });
@@ -96,7 +99,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalysis = async (base64List: string[]) => {
-    // Store full data URLs for preview (Gemini service expects raw base64)
+    // Store full data URLs for preview (Gemini/OpenAI service expects raw base64 usually, handled inside)
     // Reconstruct data URLs for local preview state
     const previewImages = base64List.map(b => `data:image/jpeg;base64,${b}`);
     setImages(previewImages);
@@ -105,13 +108,19 @@ const App: React.FC = () => {
     setResult(null);
 
     try {
+      let data: AnalysisResult;
       // Pass raw base64 strings to service
-      const data = await analyzeMedicalImage(base64List, context, language);
+      if (provider === 'openai') {
+        data = await analyzeMedicalImageOpenAI(base64List, context, language);
+      } else {
+        data = await analyzeMedicalImage(base64List, context, language);
+      }
+      
       setResult(data);
       saveToHistory(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError(t.errorGeneric);
+      setError(err.message || t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -156,13 +165,15 @@ const App: React.FC = () => {
             )}
             <h1 className="text-lg font-bold tracking-tight">{t.appTitle}</h1>
           </div>
-          <button 
-            onClick={toggleLanguage}
-            className="text-gray-500 hover:text-teal-600 p-1.5 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1 text-xs font-bold"
-          >
-            <Languages size={18} />
-            {language === 'zh' ? 'EN' : '中文'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={toggleLanguage}
+              className="text-gray-500 hover:text-teal-600 p-1.5 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1 text-xs font-bold border border-transparent hover:border-gray-200"
+            >
+              <Languages size={18} />
+              {language === 'zh' ? 'EN' : '中文'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -322,7 +333,7 @@ const App: React.FC = () => {
             <div className="space-y-3">
               <h3 className="text-xl font-bold text-gray-800">{t.loadingTitle}</h3>
               <p className="text-gray-500 text-sm max-w-[240px] mx-auto leading-relaxed">
-                {t.loadingSubtitle}
+                {t.loadingSubtitle.replace('{model}', provider === 'gemini' ? t.gemini : t.openai)}
               </p>
             </div>
           </div>

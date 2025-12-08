@@ -8,6 +8,8 @@ export enum AnalysisType {
 
 export type Language = 'zh' | 'en';
 
+export type AiProvider = 'gemini' | 'openai';
+
 export interface ReferenceRange {
   min: number;
   max: number;
