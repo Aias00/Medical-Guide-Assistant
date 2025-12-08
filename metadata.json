@@ -1,0 +1,7 @@
+{
+  "name": "Medical Guide Assistant",
+  "description": "An AI-powered assistant that interprets medical reports and medication instructions into plain language for families.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
