@@ -1,12 +1,12 @@
 
 
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, X, File as FileIcon, Loader2, Plus } from 'lucide-react';
+import { Camera, Upload, X, File as FileIcon, Loader2, Plus, Zap } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../locales';
 
 interface Props {
-  onAnalyze: (base64Images: string[]) => void;
+  onAnalyze: (base64Images: string[], runInBackground: boolean) => void;
   isAnalyzing?: boolean;
   lang: Language;
 }
@@ -23,6 +23,7 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
+  const [runInBackground, setRunInBackground] = useState(false);
   const t = translations[lang];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +107,7 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
   const handleStartAnalysis = () => {
     const readyFiles = stagedFiles.filter(f => f.status === 'ready' && f.base64Data);
     if (readyFiles.length > 0) {
-      onAnalyze(readyFiles.map(f => f.base64Data!));
+      onAnalyze(readyFiles.map(f => f.base64Data!), runInBackground);
     }
   };
 
@@ -178,7 +179,7 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
                       alt="preview" 
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                     />
-                    {/* Overlay with File Name (optional, simplified) */}
+                    {/* Overlay with File Name */}
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <p className="text-white text-[10px] truncate">{file.file.name}</p>
                     </div>
@@ -194,6 +195,20 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
                 </button>
               </div>
             ))}
+          </div>
+          
+          {/* Background Toggle */}
+          <div 
+            className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors"
+            onClick={() => setRunInBackground(!runInBackground)}
+          >
+            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${runInBackground ? 'bg-teal-500 border-teal-500' : 'bg-white border-gray-300'}`}>
+              {runInBackground && <Zap className="w-3 h-3 text-white" fill="currentColor" />}
+            </div>
+            <div className="flex-1">
+              <span className="text-sm font-semibold text-gray-700 block">{t.runInBackground}</span>
+              <span className="text-xs text-gray-400 block">{t.runInBackgroundTip}</span>
+            </div>
           </div>
 
           {/* Action Button */}

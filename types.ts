@@ -55,8 +55,12 @@ export interface PatientContext {
   condition?: string;
 }
 
+export type HistoryStatus = 'processing' | 'completed' | 'failed';
+
 export interface HistoryItem {
   id: string;
   timestamp: number;
-  result: AnalysisResult;
+  status: HistoryStatus;
+  result?: AnalysisResult; // Optional because it might be processing
+  thumbnail?: string; // Optional: save a tiny thumbnail for the list
 }

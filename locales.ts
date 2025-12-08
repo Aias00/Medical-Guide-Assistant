@@ -1,4 +1,5 @@
 
+
 export const translations = {
   zh: {
     appTitle: "家庭健康助手",
@@ -53,6 +54,8 @@ export const translations = {
     readError: "读取失败",
     analyzing: "正在分析 {count} 张图片...",
     startAnalysis: "开始解读 ({count})",
+    runInBackground: "后台执行",
+    runInBackgroundTip: "不用等待，分析完成后会在历史记录中显示",
 
     // IndicatorCard
     high: "偏高",
@@ -72,7 +75,14 @@ export const translations = {
     // Chart
     trend: "历史趋势",
     referenceRange: "参考范围",
-    current: "本次"
+    current: "本次",
+
+    // Status
+    statusProcessing: "分析进行中...",
+    statusFailed: "分析中断",
+    viewResult: "查看结果",
+    processingWait: "正在后台分析，请稍候...",
+    taskInterrupted: "任务已中断（页面关闭）"
   },
   en: {
     appTitle: "Family Health Assistant",
@@ -127,6 +137,8 @@ export const translations = {
     readError: "Error",
     analyzing: "Analyzing {count} images...",
     startAnalysis: "Interpret ({count})",
+    runInBackground: "Run in Background",
+    runInBackgroundTip: "Don't wait. Check history later.",
 
     // IndicatorCard
     high: "High",
@@ -146,6 +158,13 @@ export const translations = {
     // Chart
     trend: "Trend",
     referenceRange: "Reference Range",
-    current: "Current"
+    current: "Current",
+
+    // Status
+    statusProcessing: "Analyzing...",
+    statusFailed: "Interrupted",
+    viewResult: "View Result",
+    processingWait: "Processing in background, please wait...",
+    taskInterrupted: "Task Interrupted"
   }
 };

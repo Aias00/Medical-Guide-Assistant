@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { analyzeMedicalImage } from './services/geminiService';
 import { analyzeMedicalImageOpenAI } from './services/openaiService';
-import { AnalysisResult, AnalysisType, PatientContext, HistoryItem, Language, AiProvider } from './types';
+import { AnalysisResult, AnalysisType, PatientContext, HistoryItem, Language, AiProvider, HistoryStatus } from './types';
 import FileUpload from './components/FileUpload';
 import IndicatorCard from './components/IndicatorCard';
 import MedicationCard from './components/MedicationCard';
@@ -23,7 +22,9 @@ import {
   FileText,
   Pill,
   Image as ImageIcon,
-  Languages
+  Languages,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -52,29 +53,44 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('medical_guide_history');
     if (saved) {
       try {
-        setHistory(JSON.parse(saved));
+        const parsedHistory: HistoryItem[] = JSON.parse(saved);
+        // Mark any stuck "processing" items as "failed" on boot since we can't resume the promise
+        const cleanedHistory = parsedHistory.map(item => {
+          if (item.status === 'processing') {
+             return { ...item, status: 'failed' as HistoryStatus, result: undefined, summary: t.taskInterrupted };
+          }
+          return item;
+        });
+        setHistory(cleanedHistory);
+        // Save cleaned history back
+        if (JSON.stringify(cleanedHistory) !== saved) {
+          localStorage.setItem('medical_guide_history', JSON.stringify(cleanedHistory));
+        }
       } catch (e) {
         console.error("Failed to parse history", e);
       }
     }
-  }, []);
+  }, [t.taskInterrupted]);
 
-  const saveToHistory = (analysisResult: AnalysisResult) => {
-    if (analysisResult.type === AnalysisType.UNKNOWN) return; // Don't save failed analyses
-
-    const newItem: HistoryItem = {
-      id: Date.now().toString(),
-      timestamp: Date.now(),
-      result: analysisResult
-    };
-
-    const updatedHistory = [newItem, ...history].slice(0, 50); // Keep last 50 items
-    setHistory(updatedHistory);
-    try {
-      localStorage.setItem('medical_guide_history', JSON.stringify(updatedHistory));
-    } catch (e) {
-      console.error("Failed to save history to localStorage", e);
-    }
+  const saveToHistory = (newItem: HistoryItem) => {
+    setHistory(prev => {
+      // Check if item exists (update) or is new (insert)
+      const exists = prev.find(i => i.id === newItem.id);
+      let updatedHistory;
+      if (exists) {
+        updatedHistory = prev.map(i => i.id === newItem.id ? newItem : i);
+      } else {
+        updatedHistory = [newItem, ...prev];
+      }
+      updatedHistory = updatedHistory.slice(0, 50); // Limit to 50
+      
+      try {
+        localStorage.setItem('medical_guide_history', JSON.stringify(updatedHistory));
+      } catch (e) {
+        console.error("Failed to save history to localStorage", e);
+      }
+      return updatedHistory;
+    });
   };
 
   const deleteHistoryItem = (e: React.MouseEvent, id: string) => {
@@ -92,38 +108,93 @@ const App: React.FC = () => {
   };
 
   const loadHistoryItem = (item: HistoryItem) => {
-    setResult(item.result);
-    setImages([]); // History doesn't store images currently
-    setError(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (item.status === 'processing') return; // Cannot load processing item
+    if (item.status === 'failed') return; // Failed item logic (maybe show retry?)
+    
+    if (item.result) {
+      setResult(item.result);
+      setImages([]); // History doesn't store full images
+      setError(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
-  const handleAnalysis = async (base64List: string[]) => {
-    // Store full data URLs for preview (Gemini/OpenAI service expects raw base64 usually, handled inside)
-    // Reconstruct data URLs for local preview state
+  const handleAnalysis = async (base64List: string[], runInBackground: boolean) => {
     const previewImages = base64List.map(b => `data:image/jpeg;base64,${b}`);
-    setImages(previewImages);
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    const taskId = Date.now().toString();
 
-    try {
-      let data: AnalysisResult;
-      // Pass raw base64 strings to service
-      if (provider === 'openai') {
-        data = await analyzeMedicalImageOpenAI(base64List, context, language);
-      } else {
-        data = await analyzeMedicalImage(base64List, context, language);
-      }
-      
-      setResult(data);
-      saveToHistory(data);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || t.errorGeneric);
-    } finally {
-      setLoading(false);
+    // 1. Create a "Processing" history item immediately
+    const processingItem: HistoryItem = {
+      id: taskId,
+      timestamp: Date.now(),
+      status: 'processing',
+      thumbnail: previewImages[0] // Save a small preview if needed, or we rely on placeholders
+    };
+
+    // If background mode, add to history immediately and reset UI
+    if (runInBackground) {
+      saveToHistory(processingItem);
+      // Reset UI to allow user to do other things
+      setImages([]);
+      setResult(null);
+      setError(null);
+      // We do NOT set global 'loading' state in background mode
+    } else {
+      // Foreground mode: standard loading state
+      setImages(previewImages);
+      setLoading(true);
+      setError(null);
+      setResult(null);
     }
+
+    // 2. Define the async task
+    const performAnalysis = async () => {
+      try {
+        let data: AnalysisResult;
+        // Pass current context (closure captures the value at start time)
+        const currentContext = { ...context };
+        
+        if (provider === 'openai') {
+          data = await analyzeMedicalImageOpenAI(base64List, currentContext, language);
+        } else {
+          data = await analyzeMedicalImage(base64List, currentContext, language);
+        }
+
+        // Success Update
+        const completedItem: HistoryItem = {
+          ...processingItem,
+          status: 'completed',
+          result: data
+        };
+        saveToHistory(completedItem);
+
+        // If we were waiting in foreground, update the view immediately
+        if (!runInBackground) {
+          setResult(data);
+          setLoading(false);
+        }
+
+      } catch (err: any) {
+        console.error(err);
+        const errorMessage = err.message || t.errorGeneric;
+        
+        // Failure Update
+        const failedItem: HistoryItem = {
+          ...processingItem,
+          status: 'failed'
+          // We could store the error message in the result summary for display in history
+        };
+        saveToHistory(failedItem);
+
+        if (!runInBackground) {
+          setError(errorMessage);
+          setLoading(false);
+        }
+      }
+    };
+
+    // 3. Kick off the task
+    performAnalysis();
   };
 
   const reset = () => {
@@ -272,56 +343,98 @@ const App: React.FC = () => {
                   </button>
                 </div>
                 <div className="space-y-3">
-                  {history.map(item => (
-                    <div 
-                      key={item.id} 
-                      onClick={() => loadHistoryItem(item)}
-                      className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm active:scale-[0.98] transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex gap-3 overflow-hidden">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 
-                            ${item.result.type === AnalysisType.MEDICATION ? 'bg-blue-50 text-blue-500' : 'bg-teal-50 text-teal-500'}`}
-                          >
-                            {item.result.type === AnalysisType.MEDICATION ? <Pill size={20} /> : <FileText size={20} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                               <p className="text-xs font-medium text-gray-400">{formatDate(item.timestamp)}</p>
-                               <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
-                                 {item.result.type === AnalysisType.MEDICATION ? t.medicationLabel : t.reportLabel}
-                               </span>
-                            </div>
-                            <p className="text-sm font-bold text-gray-800 truncate leading-snug">
-                              {item.result.type === AnalysisType.MEDICATION 
-                                ? item.result.medication?.name || t.unknownLabel
-                                : t.healthReportLabel
+                  {history.map(item => {
+                    const isProcessing = item.status === 'processing';
+                    const isFailed = item.status === 'failed';
+                    
+                    return (
+                      <div 
+                        key={item.id} 
+                        onClick={() => loadHistoryItem(item)}
+                        className={`bg-white rounded-xl p-4 border transition-all relative group
+                          ${isProcessing ? 'border-teal-200 bg-teal-50/50 cursor-wait' : 
+                            isFailed ? 'border-red-200 bg-red-50/30 cursor-default' : 
+                            'border-gray-100 shadow-sm active:scale-[0.98] cursor-pointer hover:border-teal-100'
+                          }
+                        `}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3 overflow-hidden">
+                            {/* Icon / Status */}
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
+                              ${isProcessing ? 'bg-teal-100 text-teal-600' : 
+                                isFailed ? 'bg-red-100 text-red-500' :
+                                item.result?.type === AnalysisType.MEDICATION ? 'bg-blue-50 text-blue-500' : 'bg-teal-50 text-teal-500'}`}
+                            >
+                              {isProcessing ? <Loader2 size={20} className="animate-spin" /> : 
+                               isFailed ? <AlertCircle size={20} /> :
+                               item.result?.type === AnalysisType.MEDICATION ? <Pill size={20} /> : <FileText size={20} />
                               }
-                            </p>
-                            <p className="text-xs text-gray-500 truncate mt-1">
-                              {item.result.summary}
-                            </p>
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                 <p className="text-xs font-medium text-gray-400">{formatDate(item.timestamp)}</p>
+                                 {/* Status Label */}
+                                 {isProcessing && (
+                                   <span className="flex items-center gap-1 text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded border border-teal-200">
+                                     <Loader2 className="w-3 h-3 animate-spin" />
+                                     <span className="animate-pulse">{t.statusProcessing}</span>
+                                   </span>
+                                 )}
+                                 {isFailed && (
+                                   <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
+                                     {t.statusFailed}
+                                   </span>
+                                 )}
+                                 {!isProcessing && !isFailed && item.result && (
+                                   <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                                     {item.result.type === AnalysisType.MEDICATION ? t.medicationLabel : t.reportLabel}
+                                   </span>
+                                 )}
+                              </div>
+                              
+                              {/* Title */}
+                              <p className="text-sm font-bold text-gray-800 truncate leading-snug">
+                                {isProcessing ? t.loadingTitle : 
+                                 isFailed ? t.errorTitle :
+                                 item.result?.type === AnalysisType.MEDICATION 
+                                   ? item.result.medication?.name || t.unknownLabel
+                                   : t.healthReportLabel
+                                }
+                              </p>
+                              
+                              {/* Summary / Subtext */}
+                              <p className="text-xs text-gray-500 truncate mt-1">
+                                {isProcessing ? t.processingWait : 
+                                 isFailed ? t.errorGeneric :
+                                 item.result?.summary}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex flex-col items-end justify-between self-stretch">
-                           <button 
-                             onClick={(e) => deleteHistoryItem(e, item.id)}
-                             className="p-1.5 -mr-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-full transition-colors"
-                           >
-                             <Trash2 size={14} />
-                           </button>
-                           <ChevronRight size={16} className="text-gray-300 group-hover:text-teal-500 transition-colors" />
+                          
+                          <div className="flex flex-col items-end justify-between self-stretch">
+                             <button 
+                               onClick={(e) => deleteHistoryItem(e, item.id)}
+                               className="p-1.5 -mr-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-full transition-colors z-10"
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                             {item.status === 'completed' && (
+                               <ChevronRight size={16} className="text-gray-300 group-hover:text-teal-500 transition-colors" />
+                             )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Loading State */}
+        {/* Loading State (Only for Foreground) */}
         {loading && (
           <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
             <div className="relative">
@@ -339,7 +452,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Error State */}
+        {/* Error State (Only for Foreground) */}
         {error && (
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center space-y-6 animate-fadeIn mt-10">
             <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto">
