@@ -24,13 +24,16 @@ import {
   Image as ImageIcon,
   Languages,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 
 const App: React.FC = () => {
   // Now storing multiple images
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0); // For progress messages
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('zh');
@@ -45,8 +48,49 @@ const App: React.FC = () => {
   // History State
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
+  // UI State for Copy button
+  const [questionsCopied, setQuestionsCopied] = useState(false);
+
   // Translations helper
   const t = translations[language];
+
+  // Helper to generate a small thumbnail
+  const createThumbnail = async (base64: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        // Resize to max 100px
+        const maxSize = 100;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+          if (width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        // Low quality jpeg for thumbnails
+        resolve(canvas.toDataURL('image/jpeg', 0.5));
+      };
+      img.onerror = () => {
+        // Return original if fail (though risky for size) or empty
+        resolve(''); 
+      };
+      img.src = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`;
+    });
+  };
 
   // Load history on mount
   useEffect(() => {
@@ -72,6 +116,24 @@ const App: React.FC = () => {
     }
   }, [t.taskInterrupted]);
 
+  // Loading Step Effect
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (loading) {
+      setLoadingStepIndex(0);
+      interval = setInterval(() => {
+        setLoadingStepIndex(prev => {
+          // Cycle through steps, but stick on the last one until done
+          if (prev < (t.loadingSteps?.length || 1) - 1) {
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 2500); // Change message every 2.5s
+    }
+    return () => clearInterval(interval);
+  }, [loading, t.loadingSteps]);
+
   const saveToHistory = (newItem: HistoryItem) => {
     setHistory(prev => {
       // Check if item exists (update) or is new (insert)
@@ -87,7 +149,18 @@ const App: React.FC = () => {
       try {
         localStorage.setItem('medical_guide_history', JSON.stringify(updatedHistory));
       } catch (e) {
-        console.error("Failed to save history to localStorage", e);
+        console.warn("LocalStorage full, trying to save without thumbnail for this item", e);
+        // Fallback: Try saving without thumbnail if quota exceeded
+        const fallbackItem = { ...newItem, thumbnail: undefined };
+        const fallbackHistory = updatedHistory.map(i => i.id === newItem.id ? fallbackItem : i);
+        try {
+          localStorage.setItem('medical_guide_history', JSON.stringify(fallbackHistory));
+          return fallbackHistory;
+        } catch (e2) {
+          console.error("Critical: Failed to save history even without thumbnail", e2);
+          // If still failing, return state but it won't persist
+          return updatedHistory;
+        }
       }
       return updatedHistory;
     });
@@ -109,7 +182,7 @@ const App: React.FC = () => {
 
   const loadHistoryItem = (item: HistoryItem) => {
     if (item.status === 'processing') return; // Cannot load processing item
-    if (item.status === 'failed') return; // Failed item logic (maybe show retry?)
+    // Failed item logic: we don't have original images to retry easily
     
     if (item.result) {
       setResult(item.result);
@@ -123,12 +196,15 @@ const App: React.FC = () => {
     const previewImages = base64List.map(b => `data:image/jpeg;base64,${b}`);
     const taskId = Date.now().toString();
 
+    // Generate a small thumbnail for history
+    const thumbnail = await createThumbnail(base64List[0]);
+
     // 1. Create a "Processing" history item immediately
     const processingItem: HistoryItem = {
       id: taskId,
       timestamp: Date.now(),
       status: 'processing',
-      thumbnail: previewImages[0] // Save a small preview if needed, or we rely on placeholders
+      thumbnail: thumbnail 
     };
 
     // If background mode, add to history immediately and reset UI
@@ -198,6 +274,14 @@ const App: React.FC = () => {
 
     // 3. Kick off the task
     performAnalysis();
+  };
+
+  const handleCopyQuestions = () => {
+    if (!result?.questionsForDoctor) return;
+    const text = result.questionsForDoctor.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    navigator.clipboard.writeText(text);
+    setQuestionsCopied(true);
+    setTimeout(() => setQuestionsCopied(false), 2000);
   };
 
   const reset = () => {
@@ -364,15 +448,18 @@ const App: React.FC = () => {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex gap-3 overflow-hidden">
                             {/* Icon / Status */}
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden border border-black/5
                               ${isProcessing ? 'bg-teal-100 text-teal-600' : 
                                 isFailed ? 'bg-red-100 text-red-500' :
                                 item.result?.type === AnalysisType.MEDICATION ? 'bg-blue-50 text-blue-500' : 'bg-teal-50 text-teal-500'}`}
                             >
-                              {isProcessing ? <Loader2 size={20} className="animate-spin" /> : 
-                               isFailed ? <AlertCircle size={20} /> :
-                               item.result?.type === AnalysisType.MEDICATION ? <Pill size={20} /> : <FileText size={20} />
-                              }
+                              {item.thumbnail ? (
+                                <img src={item.thumbnail} alt="thumb" className="w-full h-full object-cover opacity-90" />
+                              ) : (
+                                isProcessing ? <Loader2 size={20} className="animate-spin" /> : 
+                                isFailed ? <AlertCircle size={20} /> :
+                                item.result?.type === AnalysisType.MEDICATION ? <Pill size={20} /> : <FileText size={20} />
+                              )}
                             </div>
                             
                             <div className="flex-1 min-w-0">
@@ -410,7 +497,7 @@ const App: React.FC = () => {
                               {/* Summary / Subtext */}
                               <p className="text-xs text-gray-500 truncate mt-1">
                                 {isProcessing ? t.processingWait : 
-                                 isFailed ? t.errorGeneric :
+                                 isFailed ? (item.summary || t.errorGeneric) :
                                  item.result?.summary}
                               </p>
                             </div>
@@ -446,9 +533,23 @@ const App: React.FC = () => {
                 <Sparkles className="w-8 h-8 text-teal-500 animate-pulse" />
               </div>
             </div>
-            <div className="space-y-3">
-              <h3 className="text-xl font-bold text-gray-800">{t.loadingTitle}</h3>
-              <p className="text-gray-500 text-sm max-w-[240px] mx-auto leading-relaxed">
+            <div className="space-y-4 max-w-[280px] mx-auto">
+              {/* Dynamic Loading Step Text */}
+              <div className="h-12 flex items-center justify-center">
+                <h3 className="text-lg font-bold text-gray-800 animate-fadeIn key={loadingStepIndex}">
+                  {t.loadingSteps?.[loadingStepIndex] || t.loadingTitle}
+                </h3>
+              </div>
+              
+              {/* Progress Bar Visual */}
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-teal-500 h-1.5 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.min(100, ((loadingStepIndex + 1) / (t.loadingSteps?.length || 1)) * 100)}%` }}
+                />
+              </div>
+
+              <p className="text-gray-400 text-xs leading-relaxed">
                 {t.loadingSubtitle.replace('{model}', provider === 'gemini' ? t.gemini : t.openai)}
               </p>
             </div>
@@ -534,10 +635,19 @@ const App: React.FC = () => {
                 {/* Questions for Doctor */}
                 {result.questionsForDoctor && result.questionsForDoctor.length > 0 && (
                   <section className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-6 border border-indigo-100">
-                    <h2 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5" />
-                      {t.questionsTitle}
-                    </h2>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5" />
+                        {t.questionsTitle}
+                      </h2>
+                      <button
+                        onClick={handleCopyQuestions}
+                        className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-100 hover:bg-indigo-200 px-3 py-1.5 rounded-lg transition-colors active:scale-95"
+                      >
+                        {questionsCopied ? <Check size={14} /> : <Copy size={14} />}
+                        {questionsCopied ? t.copied : t.copy}
+                      </button>
+                    </div>
                     <ul className="space-y-3">
                       {result.questionsForDoctor.map((q, idx) => (
                         <li key={idx} className="flex gap-3 bg-white p-3 rounded-xl text-sm text-indigo-900 shadow-sm border border-indigo-50/50">

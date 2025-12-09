@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Indicator, Language } from '../types';
-import { ChevronDown, ChevronUp, AlertCircle, CheckCircle, Info, MinusCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, AlertCircle, CheckCircle, Info, MinusCircle, Share2, Check } from 'lucide-react';
 import IndicatorChart from './IndicatorChart';
 import { translations } from '../locales';
 
@@ -13,6 +13,7 @@ interface Props {
 
 const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isShared, setIsShared] = useState(false);
   const t = translations[lang];
 
   const getStatusColor = (status: string) => {
@@ -30,6 +31,17 @@ const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'HIGH': return t.high;
+      case 'LOW': return t.low;
+      case 'BORDERLINE': return t.borderline;
+      case 'CRITICAL': return t.critical;
+      case 'NORMAL': return t.normal;
+      default: return status;
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'HIGH':
@@ -44,6 +56,31 @@ const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
         return <CheckCircle className="w-4 h-4" />;
       default:
         return <Info className="w-4 h-4" />;
+    }
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    const textToShare = `【${t.appTitle}】\n${indicator.name}: ${indicator.value}\n${t.interpretation}: ${getStatusLabel(indicator.status)}\n\n${indicator.explanation}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: indicator.name,
+          text: textToShare
+        });
+      } catch (error) {
+        console.log("Share canceled or failed", error);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(textToShare);
+        setIsShared(true);
+        setTimeout(() => setIsShared(false), 2000);
+      } catch (err) {
+        console.error("Copy failed", err);
+      }
     }
   };
 
@@ -71,7 +108,17 @@ const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
 
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 text-sm">
-          <div className="h-px bg-black/5 w-full mb-3" />
+          <div className="flex items-center justify-between mb-3 mt-1">
+            <div className="h-px bg-black/5 flex-1" />
+            <button 
+              onClick={handleShare}
+              className="ml-3 flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-teal-600 transition-colors bg-white/50 px-2 py-1 rounded-lg"
+            >
+              {isShared ? <Check size={12} /> : <Share2 size={12} />}
+              {isShared ? t.copied : t.share}
+            </button>
+          </div>
+          
           <div className="space-y-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">{t.interpretation}</p>

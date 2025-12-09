@@ -23,7 +23,15 @@ export const translations = {
     clearHistory: "清空记录",
     confirmClear: "确定要清空所有历史记录吗？",
     loadingTitle: "正在智能分析...",
-    loadingSubtitle: "{model} 正在识别关键信息并翻译为通俗语言",
+    loadingSubtitle: "{model} 正在为您解读",
+    loadingSteps: [
+      "正在识别图片中的文字信息...",
+      "正在提取关键医学指标...",
+      "正在比对专业医学数据库...",
+      "正在生成通俗易懂的解释...",
+      "正在整理问诊建议...",
+      "即将完成..."
+    ],
     errorTitle: "分析遇到问题",
     errorGeneric: "分析失败，请确保图片清晰，或稍后重试。",
     retry: "重新尝试",
@@ -82,7 +90,12 @@ export const translations = {
     statusFailed: "分析中断",
     viewResult: "查看结果",
     processingWait: "正在后台分析，请稍候...",
-    taskInterrupted: "任务已中断（页面关闭）"
+    taskInterrupted: "任务已中断（页面关闭）",
+
+    // Actions
+    copy: "复制",
+    copied: "已复制",
+    share: "分享"
   },
   en: {
     appTitle: "Family Health Assistant",
@@ -106,7 +119,15 @@ export const translations = {
     clearHistory: "Clear All",
     confirmClear: "Are you sure you want to clear all history?",
     loadingTitle: "Analyzing...",
-    loadingSubtitle: "{model} is identifying key information and translating it for you.",
+    loadingSubtitle: "{model} is interpreting for you",
+    loadingSteps: [
+      "Recognizing text in images...",
+      "Extracting key medical indicators...",
+      "Consulting medical database...",
+      "Translating to plain language...",
+      "Compiling questions for doctor...",
+      "Finishing up..."
+    ],
     errorTitle: "Analysis Failed",
     errorGeneric: "Analysis failed. Please ensure images are clear or try again later.",
     retry: "Try Again",
@@ -165,6 +186,11 @@ export const translations = {
     statusFailed: "Interrupted",
     viewResult: "View Result",
     processingWait: "Processing in background, please wait...",
-    taskInterrupted: "Task Interrupted"
+    taskInterrupted: "Task Interrupted",
+
+    // Actions
+    copy: "Copy",
+    copied: "Copied",
+    share: "Share"
   }
 };
