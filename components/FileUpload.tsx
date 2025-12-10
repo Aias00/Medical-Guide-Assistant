@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, X, File as FileIcon, Loader2, Plus, Zap } from 'lucide-react';
+import { Camera, Upload, X, File as FileIcon, Loader2, Plus, Zap, FileText } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../locales';
+import { compressImage } from '../utils/imageUtils';
+import { convertPdfToImages } from '../utils/pdfUtils';
 
 interface Props {
   onAnalyze: (base64Images: string[], runInBackground: boolean) => void;
@@ -15,6 +17,8 @@ interface StagedFile {
   status: 'reading' | 'ready' | 'error';
   previewUrl?: string; // Full data URL for display
   base64Data?: string; // Raw base64 for API
+  isPdf?: boolean;
+  pageCount?: number;
 }
 
 const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) => {
@@ -34,45 +38,74 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
     }
   };
 
-  const processFiles = (files: File[]) => {
+  const processFiles = async (files: File[]) => {
     const newFiles: StagedFile[] = files.map(file => ({
       id: Math.random().toString(36).substring(7),
       file,
-      status: 'reading'
+      status: 'reading',
+      isPdf: file.type === 'application/pdf'
     }));
 
     setStagedFiles(prev => [...prev, ...newFiles]);
 
     // Process each file
-    newFiles.forEach(stagedFile => {
-      if (!stagedFile.file.type.startsWith('image/')) {
-        updateFileStatus(stagedFile.id, 'error');
-        return;
-      }
+    for (const stagedFile of newFiles) {
+      try {
+        if (stagedFile.file.type === 'application/pdf') {
+          // Handle PDF
+          const images = await convertPdfToImages(stagedFile.file);
+          
+          // PDF might generate multiple images. We'll verify how to handle this.
+          // For now, we update the staged file to 'ready' but we might need to explode it into multiple files
+          // OR we handle multiple base64s per staged file.
+          // Let's explode for simplicity in API call, but keep UI grouped? 
+          // Actually, let's keep it simple: Replace the PDF StagedFile with multiple Image StagedFiles?
+          // Or just store the base64s array in the staged file.
+          
+          // Strategy: The StagedFile will hold the first page as preview, and we'll flatMap when sending.
+          // Wait, the parent expects base64Images string[].
+          // Let's update StagedFile to hold multiple base64s if needed.
+          // But to keep it simple, I'll allow StagedFile to store the array of base64s.
+          
+          const base64List = images.map(img => img.split(',')[1]);
+          
+          setStagedFiles(prev => prev.map(f => {
+            if (f.id === stagedFile.id) {
+              return { 
+                ...f, 
+                status: 'ready', 
+                previewUrl: images[0], // Preview first page
+                base64Data: JSON.stringify(base64List), // Hack: store array as string to fit type, or we handle in submit
+                pageCount: images.length
+              };
+            }
+            return f;
+          }));
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        // Remove data URL prefix for API
-        const base64Data = base64.split(',')[1];
-        
-        setStagedFiles(prev => prev.map(f => {
-          if (f.id === stagedFile.id) {
-            return { 
-              ...f, 
-              status: 'ready', 
-              previewUrl: base64, 
-              base64Data: base64Data 
-            };
-          }
-          return f;
-        }));
-      };
-      reader.onerror = () => {
+        } else if (stagedFile.file.type.startsWith('image/')) {
+          // Handle Image
+          const dataUrl = await compressImage(stagedFile.file);
+          const base64Data = dataUrl.split(',')[1];
+          
+          setStagedFiles(prev => prev.map(f => {
+            if (f.id === stagedFile.id) {
+              return { 
+                ...f, 
+                status: 'ready', 
+                previewUrl: dataUrl, 
+                base64Data: base64Data 
+              };
+            }
+            return f;
+          }));
+        } else {
+          updateFileStatus(stagedFile.id, 'error');
+        }
+      } catch (error) {
+        console.error("File processing error", error);
         updateFileStatus(stagedFile.id, 'error');
-      };
-      reader.readAsDataURL(stagedFile.file);
-    });
+      }
+    }
   };
 
   const updateFileStatus = (id: string, status: 'reading' | 'ready' | 'error') => {
@@ -105,8 +138,20 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
   const handleStartAnalysis = () => {
     const readyFiles = stagedFiles.filter(f => f.status === 'ready' && f.base64Data);
     if (readyFiles.length > 0) {
-      onAnalyze(readyFiles.map(f => f.base64Data!), runInBackground);
-      setStagedFiles([]); // Clear staged files after starting
+      // Flatten all images (PDF pages + single images)
+      const allBase64: string[] = [];
+      
+      readyFiles.forEach(f => {
+        if (f.isPdf && f.base64Data) {
+          const pages = JSON.parse(f.base64Data);
+          allBase64.push(...pages);
+        } else if (f.base64Data) {
+          allBase64.push(f.base64Data);
+        }
+      });
+
+      onAnalyze(allBase64, runInBackground);
+      setStagedFiles([]); 
     }
   };
 
@@ -127,7 +172,7 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
         <input 
           ref={fileInputRef}
           type="file" 
-          accept="image/*" 
+          accept="image/*,application/pdf" 
           multiple
           className="hidden" 
           onChange={handleFileChange}
@@ -162,9 +207,9 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
             {stagedFiles.map((file) => (
               <div key={file.id} className="relative group rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm aspect-square">
                 {file.status === 'reading' ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 text-center p-2">
                     <Loader2 className="w-6 h-6 text-teal-500 animate-spin mb-2" />
-                    <span className="text-xs text-gray-400">{t.reading}</span>
+                    <span className="text-xs text-gray-400">{file.isPdf ? 'Converting PDF...' : t.reading}</span>
                   </div>
                 ) : file.status === 'error' ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50">
@@ -179,8 +224,13 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                     />
                     {/* Overlay with File Name */}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
                       <p className="text-white text-[10px] truncate">{file.file.name}</p>
+                      {file.isPdf && file.pageCount && (
+                        <span className="absolute top-1 left-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm">
+                          PDF ({file.pageCount} p)
+                        </span>
+                      )}
                     </div>
                   </>
                 )}
@@ -228,7 +278,7 @@ const FileUpload: React.FC<Props> = ({ onAnalyze, isAnalyzing = false, lang }) =
               </>
             ) : (
               <>
-                {t.startAnalysis.replace('{count}', stagedFiles.length.toString())}
+                {t.startAnalysis.replace('{count}', stagedFiles.reduce((acc, f) => acc + (f.pageCount || 1), 0).toString())}
               </>
             )}
           </button>

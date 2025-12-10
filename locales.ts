@@ -1,12 +1,10 @@
-
-
 export const translations = {
   zh: {
     appTitle: "家庭健康助手",
     back: "返回",
     heroTitle: "读懂您的健康报告",
     heroSubtitle: "AI 辅助解读体检报告、化验单与药品说明书",
-    userInfo: "使用者信息 (可选 - 帮助优化解读)",
+    userInfo: "家庭档案",
     expand: "展开",
     collapse: "收起",
     age: "年龄",
@@ -14,6 +12,8 @@ export const translations = {
     male: "男",
     female: "女",
     notSelected: "未选择",
+    reportDate: "报告日期",
+    reportDatePlaceholder: "默认为今天",
     history: "既往病史 / 关注疾病",
     historyPlaceholder: "例如: 高血压, 糖尿病, 对青霉素过敏...",
     featureIndicators: "指标解读",
@@ -25,12 +25,12 @@ export const translations = {
     loadingTitle: "正在智能分析...",
     loadingSubtitle: "{model} 正在为您解读",
     loadingSteps: [
-      "正在识别图片中的文字信息...",
+      "正在上传并识别图片...",
       "正在提取关键医学指标...",
       "正在比对专业医学数据库...",
       "正在生成通俗易懂的解释...",
       "正在整理问诊建议...",
-      "即将完成..."
+      "正在生成最终报告..."
     ],
     errorTitle: "分析遇到问题",
     errorGeneric: "分析失败，请确保图片清晰，或稍后重试。",
@@ -56,14 +56,15 @@ export const translations = {
 
     // FileUpload
     uploadTitle: "点击上传 / 拍摄",
-    uploadSubtitle: "支持多张图片（体检报告、化验单、药品）",
-    addMore: "继续添加图片",
-    reading: "读取中...",
+    uploadSubtitle: "支持 图片 或 PDF 文件",
+    addMore: "继续添加文件",
+    reading: "处理中...",
     readError: "读取失败",
-    analyzing: "正在分析 {count} 张图片...",
+    analyzing: "正在分析 {count} 页内容...",
     startAnalysis: "开始解读 ({count})",
     runInBackground: "后台执行",
     runInBackgroundTip: "不用等待，分析完成后会在历史记录中显示",
+    pdfConverting: "正在转换 PDF 第 {page} 页...",
 
     // IndicatorCard
     high: "偏高",
@@ -84,6 +85,7 @@ export const translations = {
     trend: "历史趋势",
     referenceRange: "参考范围",
     current: "本次",
+    compareHistory: "综合历史数据",
 
     // Status
     statusProcessing: "分析进行中...",
@@ -95,14 +97,42 @@ export const translations = {
     // Actions
     copy: "复制",
     copied: "已复制",
-    share: "分享"
+    share: "分享",
+    shareImage: "生成分享卡片",
+    generating: "生成中...",
+    playAudio: "播放发音",
+    copyFullReport: "复制完整报告",
+
+    // Chat
+    chatTitle: "AI 医生助理",
+    chatSubtitle: "基于本次报告内容为您答疑解惑",
+    chatPlaceholder: "输入您的问题...",
+    chatPlaceholderListening: "正在听...",
+    send: "发送",
+    thinking: "思考中...",
+    listening: "正在听...",
+    voiceInput: "语音输入",
+    voiceInputNotSupported: "您的浏览器不支持语音输入",
+
+    // Profiles
+    profileMe: "我自己",
+    profileMom: "妈妈",
+    profileDad: "爸爸",
+    profileChild: "孩子",
+    addProfile: "添加成员",
+    editProfile: "编辑",
+    deleteProfile: "删除",
+    createProfileTitle: "创建新档案",
+    profileName: "称呼 (如: 爷爷)",
+    save: "保存",
+    cancel: "取消"
   },
   en: {
     appTitle: "Family Health Assistant",
     back: "Back",
     heroTitle: "Understand Your Health Report",
     heroSubtitle: "AI-powered interpretation of medical reports and medication instructions.",
-    userInfo: "Patient Context (Optional)",
+    userInfo: "Family Profiles",
     expand: "Expand",
     collapse: "Collapse",
     age: "Age",
@@ -110,6 +140,8 @@ export const translations = {
     male: "Male",
     female: "Female",
     notSelected: "Not Selected",
+    reportDate: "Report Date",
+    reportDatePlaceholder: "Defaults to Today",
     history: "Medical History / Conditions",
     historyPlaceholder: "e.g., Hypertension, Diabetes, Penicillin allergy...",
     featureIndicators: "Lab Results",
@@ -121,12 +153,12 @@ export const translations = {
     loadingTitle: "Analyzing...",
     loadingSubtitle: "{model} is interpreting for you",
     loadingSteps: [
-      "Recognizing text in images...",
+      "Uploading and processing files...",
       "Extracting key medical indicators...",
-      "Consulting medical database...",
+      "Consulting medical knowledge base...",
       "Translating to plain language...",
       "Compiling questions for doctor...",
-      "Finishing up..."
+      "Finalizing report..."
     ],
     errorTitle: "Analysis Failed",
     errorGeneric: "Analysis failed. Please ensure images are clear or try again later.",
@@ -152,14 +184,15 @@ export const translations = {
 
     // FileUpload
     uploadTitle: "Upload / Capture",
-    uploadSubtitle: "Supports multiple images (Reports, Labs, Meds)",
-    addMore: "Add More Images",
-    reading: "Reading...",
+    uploadSubtitle: "Supports Images or PDF",
+    addMore: "Add More Files",
+    reading: "Processing...",
     readError: "Error",
-    analyzing: "Analyzing {count} images...",
+    analyzing: "Analyzing {count} pages...",
     startAnalysis: "Interpret ({count})",
     runInBackground: "Run in Background",
     runInBackgroundTip: "Don't wait. Check history later.",
+    pdfConverting: "Converting PDF page {page}...",
 
     // IndicatorCard
     high: "High",
@@ -180,6 +213,7 @@ export const translations = {
     trend: "Trend",
     referenceRange: "Reference Range",
     current: "Current",
+    compareHistory: "Historical Data",
 
     // Status
     statusProcessing: "Analyzing...",
@@ -191,6 +225,34 @@ export const translations = {
     // Actions
     copy: "Copy",
     copied: "Copied",
-    share: "Share"
+    share: "Share",
+    shareImage: "Share Card",
+    generating: "Generating...",
+    playAudio: "Play Audio",
+    copyFullReport: "Copy Full Report",
+
+    // Chat
+    chatTitle: "AI Doctor Assistant",
+    chatSubtitle: "Ask questions based on this report",
+    chatPlaceholder: "Ask a question...",
+    chatPlaceholderListening: "Listening...",
+    send: "Send",
+    thinking: "Thinking...",
+    listening: "Listening...",
+    voiceInput: "Voice Input",
+    voiceInputNotSupported: "Browser does not support voice input",
+
+    // Profiles
+    profileMe: "Me",
+    profileMom: "Mom",
+    profileDad: "Dad",
+    profileChild: "Child",
+    addProfile: "Add Profile",
+    editProfile: "Edit",
+    deleteProfile: "Delete",
+    createProfileTitle: "Create New Profile",
+    profileName: "Name (e.g. Grandpa)",
+    save: "Save",
+    cancel: "Cancel"
   }
 };

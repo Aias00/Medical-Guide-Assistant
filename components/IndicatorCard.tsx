@@ -1,17 +1,18 @@
 
 
 import React, { useState } from 'react';
-import { Indicator, Language } from '../types';
-import { ChevronDown, ChevronUp, AlertCircle, CheckCircle, Info, MinusCircle, Share2, Check } from 'lucide-react';
+import { Indicator, Language, HistoricalValue } from '../types';
+import { ChevronDown, ChevronUp, AlertCircle, CheckCircle, Info, MinusCircle, Share2, Check, Volume2 } from 'lucide-react';
 import IndicatorChart from './IndicatorChart';
 import { translations } from '../locales';
 
 interface Props {
   indicator: Indicator;
+  historyTrend?: HistoricalValue[]; // Global history across reports
   lang: Language;
 }
 
-const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
+const IndicatorCard: React.FC<Props> = ({ indicator, historyTrend, lang }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const t = translations[lang];
@@ -84,6 +85,17 @@ const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
     }
   };
 
+  const handleSpeak = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(indicator.name);
+      // Ensure we speak in the target language (which usually matches the text)
+      utterance.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   return (
     <div 
       className={`mb-3 border rounded-xl overflow-hidden transition-all duration-200 ${getStatusColor(indicator.status)} border-opacity-60 shadow-sm`}
@@ -95,7 +107,14 @@ const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-gray-900">{indicator.name}</h3>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-white/60 shadow-sm flex items-center gap-1`}>
+            <button
+              onClick={handleSpeak}
+              className="text-gray-400 hover:text-teal-600 p-1 rounded-full hover:bg-white/50 transition-colors"
+              title={t.playAudio}
+            >
+              <Volume2 size={14} />
+            </button>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-white/60 shadow-sm flex items-center gap-1 ml-1`}>
               {getStatusIcon(indicator.status)}
             </span>
           </div>
@@ -125,8 +144,8 @@ const IndicatorCard: React.FC<Props> = ({ indicator, lang }) => {
               <p className="text-gray-800 leading-relaxed">{indicator.explanation}</p>
             </div>
             
-            {/* Visual Chart */}
-            <IndicatorChart indicator={indicator} lang={lang} />
+            {/* Visual Chart with aggregated history if available */}
+            <IndicatorChart indicator={indicator} globalHistory={historyTrend} lang={lang} />
 
             {(indicator.status !== 'NORMAL') && (
               <div className="bg-white/50 p-3 rounded-lg mt-3">

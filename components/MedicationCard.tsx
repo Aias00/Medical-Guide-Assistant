@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { MedicationInfo, Language } from '../types';
-import { Pill, AlertTriangle, Clock, Activity } from 'lucide-react';
+import { Pill, AlertTriangle, Clock, Activity, Volume2 } from 'lucide-react';
 import { translations } from '../locales';
 
 interface Props {
@@ -13,6 +13,15 @@ interface Props {
 const MedicationCard: React.FC<Props> = ({ data, lang }) => {
   const t = translations[lang];
 
+  const handleSpeak = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(data.name);
+      utterance.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 shadow-sm">
@@ -21,6 +30,13 @@ const MedicationCard: React.FC<Props> = ({ data, lang }) => {
             <Pill size={24} />
           </div>
           <h2 className="text-xl font-bold text-gray-900">{data.name}</h2>
+          <button
+            onClick={handleSpeak}
+            className="text-gray-400 hover:text-blue-600 p-1.5 rounded-full hover:bg-blue-100/50 transition-colors ml-[-4px]"
+            title={t.playAudio}
+          >
+            <Volume2 size={20} />
+          </button>
         </div>
         
         <div className="space-y-4">

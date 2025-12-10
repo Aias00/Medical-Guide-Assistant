@@ -1,5 +1,3 @@
-
-
 export enum AnalysisType {
   REPORT = 'REPORT',
   MEDICATION = 'MEDICATION',
@@ -18,6 +16,7 @@ export interface ReferenceRange {
 export interface HistoricalValue {
   date: string; // "2023-01", "Previous", etc.
   value: number;
+  isCurrent?: boolean; // UI helper
 }
 
 export interface Indicator {
@@ -49,18 +48,38 @@ export interface AnalysisResult {
   disclaimer: string; // Safety warning
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  relation: string; // e.g. "Father", "Mother", "Me"
+  avatarColor: string; // Hex color
+  context: PatientContext;
+}
+
 export interface PatientContext {
   age?: string;
   gender?: string;
-  condition?: string;
+  condition?: string; // Medical history
+  reportDate?: string; // Date of the actual report content
 }
 
 export type HistoryStatus = 'processing' | 'completed' | 'failed';
 
+export type ChatRole = 'user' | 'model';
+
+export interface ChatMessage {
+  role: ChatRole;
+  content: string;
+}
+
 export interface HistoryItem {
   id: string;
-  timestamp: number;
+  profileId?: string; // Link to a specific user profile
+  timestamp: number; // Created At
+  reportDate?: string; // User specified date of the report content
   status: HistoryStatus;
   result?: AnalysisResult; // Optional because it might be processing
   thumbnail?: string; // Optional: save a tiny thumbnail for the list
+  summary?: string; // Optional error message or summary
+  chatHistory?: ChatMessage[]; // Persisted chat conversation
 }
