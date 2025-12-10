@@ -2,10 +2,15 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisResult, AnalysisType, PatientContext, Language, ChatMessage } from "../types";
 
-// Initialize the client
+// --- CONFIGURATION ---
+// If BACKEND_URL is set (e.g. "https://my-medical-app.run.app"), the app will use the backend.
+// Otherwise, it falls back to client-side API calls (Current Demo Mode).
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || ""; 
+
+// Initialize the client-side SDK (Fallback)
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Define the schema for the output
+// --- SCHEMAS (Kept for client-side fallback) ---
 const indicatorSchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -87,12 +92,61 @@ const responseSchema: Schema = {
   required: ["type", "summary", "questionsForDoctor", "disclaimer"]
 };
 
+// --- HELPER FUNCTIONS ---
+
+const analyzeViaBackend = async (
+  base64Images: string[], 
+  context?: PatientContext,
+  language: Language = 'zh'
+): Promise<AnalysisResult> => {
+  const response = await fetch(`${BACKEND_URL}/api/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ images: base64Images, context, language })
+  });
+  
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "Backend Analysis Failed");
+  }
+  return await response.json();
+};
+
+const chatViaBackend = async (
+  history: ChatMessage[], 
+  newMessage: string, 
+  analysisContext: AnalysisResult,
+  language: Language = 'zh'
+): Promise<string> => {
+  const response = await fetch(`${BACKEND_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ history, message: newMessage, analysisContext, language })
+  });
+
+  if (!response.ok) {
+    throw new Error("Backend Chat Failed");
+  }
+  const data = await response.json();
+  return data.text;
+};
+
+// --- EXPORTED FUNCTIONS ---
+
 export const analyzeMedicalImage = async (
   base64Images: string[], 
   context?: PatientContext,
   language: Language = 'zh'
 ): Promise<AnalysisResult> => {
   
+  // 1. BACKEND MODE
+  if (BACKEND_URL) {
+    console.log("Using Backend API");
+    return analyzeViaBackend(base64Images, context, language);
+  }
+
+  // 2. CLIENT-SIDE MODE (Fallback)
+  console.log("Using Client-Side Gemini SDK");
   const languageName = language === 'en' ? 'ENGLISH' : 'CHINESE (Simplified)';
 
   const systemInstruction = `
@@ -152,21 +206,14 @@ export const analyzeMedicalImage = async (
       return JSON.parse(cleanedText) as AnalysisResult;
     } catch (parseError) {
       console.error("JSON Parse Error:", parseError);
-      console.log("Raw Text:", cleanedText.substring(cleanedText.length - 100)); // Log end of string
-
+      
       // Attempt BASIC repair for truncated JSON
-      // If it ends with something looking like an open array or object inside indicators, try to close it.
-      // This is a last-ditch effort.
       try {
         let fixedText = cleanedText;
-        // If it looks like it was cut off in the indicators array
         if (fixedText.lastIndexOf('}]') === -1 && fixedText.includes('"indicators": [')) {
-            // Find the last closing brace of an item
             const lastItemEnd = fixedText.lastIndexOf('}');
             if (lastItemEnd > fixedText.indexOf('"indicators": [')) {
-                // Cut off everything after the last valid item and close the array and object
                 fixedText = fixedText.substring(0, lastItemEnd + 1) + '] }';
-                console.log("Attempting to repair JSON...");
                 return JSON.parse(fixedText) as AnalysisResult;
             }
         }
@@ -198,6 +245,13 @@ export const sendChatMessage = async (
   analysisContext: AnalysisResult,
   language: Language = 'zh'
 ): Promise<string> => {
+  
+  // 1. BACKEND MODE
+  if (BACKEND_URL) {
+    return chatViaBackend(history, newMessage, analysisContext, language);
+  }
+
+  // 2. CLIENT-SIDE MODE
   const languageName = language === 'en' ? 'ENGLISH' : 'CHINESE (Simplified)';
 
   const systemInstruction = `
