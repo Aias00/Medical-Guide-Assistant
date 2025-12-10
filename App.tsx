@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { analyzeMedicalImage } from './services/geminiService';
 import { analyzeMedicalImageOpenAI } from './services/openaiService';
@@ -147,7 +148,8 @@ const App: React.FC = () => {
     if (item.result) {
       setResult(item.result);
       setActiveHistoryId(item.id);
-      setImages([]); 
+      // Restore images from history if available
+      setImages(item.originalImages || []); 
       setError(null);
       setReportDate(item.reportDate || new Date().toISOString().split('T')[0]);
       
@@ -225,6 +227,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalysis = async (base64List: string[], runInBackground: boolean) => {
+    // These are full data URLs including the scheme
     const previewImages = base64List.map(b => `data:image/jpeg;base64,${b}`);
     const taskId = Date.now().toString();
     const thumbnail = await createThumbnail(base64List[0]);
@@ -237,7 +240,8 @@ const App: React.FC = () => {
       reportDate: reportDate,
       status: 'processing',
       thumbnail: thumbnail,
-      chatHistory: []
+      chatHistory: [],
+      originalImages: previewImages // Save full resolution images
     };
 
     if (runInBackground) {
@@ -270,6 +274,8 @@ const App: React.FC = () => {
           setResult(data);
           setLoading(false);
           setActiveHistoryId(taskId);
+          // Ensure we scroll to top when result is ready
+          window.scrollTo(0, 0);
         }
       } catch (err: any) {
         console.error(err);
@@ -306,9 +312,47 @@ const App: React.FC = () => {
 
   const handleCopyFullReport = () => {
     if (!result) return;
-    // ... (Existing logic, simplified for brevity but functional logic remains same)
+    
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+        case 'HIGH': return t.high;
+        case 'LOW': return t.low;
+        case 'BORDERLINE': return t.borderline;
+        case 'CRITICAL': return t.critical;
+        case 'NORMAL': return t.normal;
+        default: return status;
+        }
+    };
+
      let text = `【${t.appTitle}】\n\n${t.summaryTitle}:\n${result.summary}\n\n`;
-     // ... Rest of copy logic ...
+     
+     if (result.type === AnalysisType.REPORT && result.indicators) {
+        text += `${t.indicatorsTitle}:\n`;
+        result.indicators.forEach(ind => {
+            text += `- ${ind.name}: ${ind.value} [${getStatusLabel(ind.status)}]\n`;
+            if (ind.status !== 'NORMAL') {
+                text += `  ${t.interpretation}: ${ind.explanation}\n`;
+            }
+        });
+        text += '\n';
+     }
+
+     if (result.type === AnalysisType.MEDICATION && result.medication) {
+        text += `${t.medicationLabel}: ${result.medication.name}\n`;
+        text += `${t.usage}: ${result.medication.usage}\n`;
+        if (result.medication.warnings.length) {
+            text += `${t.warnings}: ${result.medication.warnings.join('; ')}\n`;
+        }
+        text += '\n';
+     }
+     
+     if (result.questionsForDoctor?.length) {
+        text += `${t.questionsTitle}:\n`;
+        result.questionsForDoctor.forEach((q, i) => text += `${i+1}. ${q}\n`);
+     }
+
+     text += `\n${t.disclaimerTitle} ${t.disclaimerText}`;
+     
      navigator.clipboard.writeText(text);
      setFullReportCopied(true);
      setTimeout(() => setFullReportCopied(false), 2000);

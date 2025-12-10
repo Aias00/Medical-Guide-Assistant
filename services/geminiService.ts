@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnalysisResult, AnalysisType, PatientContext, Language, ChatMessage } from "../types";
 
@@ -9,31 +10,31 @@ const indicatorSchema: Schema = {
   type: Type.OBJECT,
   properties: {
     name: { type: Type.STRING, description: "Name of the medical indicator" },
-    value: { type: Type.STRING, description: "Original string value as shown in report" },
-    valueNumber: { type: Type.NUMBER, description: "Numeric value extracted from 'value'. Null if not numeric." },
-    unit: { type: Type.STRING, description: "Unit of measurement (e.g. mg/dL, %)" },
+    value: { type: Type.STRING, description: "Original string value" },
+    valueNumber: { type: Type.NUMBER, description: "Numeric value from 'value'. Null if non-numeric." },
+    unit: { type: Type.STRING, description: "Unit (e.g. mg/dL)" },
     status: { 
       type: Type.STRING, 
       enum: ['HIGH', 'LOW', 'NORMAL', 'CRITICAL', 'BORDERLINE', 'UNKNOWN'],
-      description: "Status. CRITICAL for dangerous values." 
+      description: "Status" 
     },
-    explanation: { type: Type.STRING, description: "Simple explanation of what this is (max 20 words)" },
-    possibleCauses: { type: Type.STRING, description: "Common reasons for abnormality (max 20 words)" },
+    explanation: { type: Type.STRING, description: "Very short explanation (max 15 words)" },
+    possibleCauses: { type: Type.STRING, description: "Common reasons (max 15 words)" },
     referenceRange: {
       type: Type.OBJECT,
       properties: {
         min: { type: Type.NUMBER },
         max: { type: Type.NUMBER }
       },
-      description: "Numeric min/max reference range. If '< 5', min=0, max=5."
+      description: "Min/max numeric range"
     },
     history: {
       type: Type.ARRAY,
-      description: "Previous values found in the same row (e.g. from 'Previous Result' column)",
+      description: "Previous values from columns like 'Last Visit'",
       items: {
         type: Type.OBJECT,
         properties: {
-          date: { type: Type.STRING, description: "Date or label e.g. '2023-05' or 'Previous'" },
+          date: { type: Type.STRING, description: "Date or label" },
           value: { type: Type.NUMBER }
         }
       }
@@ -45,15 +46,15 @@ const indicatorSchema: Schema = {
 const medicationSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    name: { type: Type.STRING, description: "Name of the medication" },
-    usage: { type: Type.STRING, description: "Simplified dosage and administration instructions" },
+    name: { type: Type.STRING, description: "Medication name" },
+    usage: { type: Type.STRING, description: "Dosage instructions" },
     warnings: { 
       type: Type.ARRAY, 
       items: { type: Type.STRING },
-      description: "Critical warnings or contraindications"
+      description: "Critical warnings"
     },
-    sideEffects: { type: Type.STRING, description: "Common side effects in plain language" },
-    tips: { type: Type.STRING, description: "Helpful tips" }
+    sideEffects: { type: Type.STRING, description: "Side effects" },
+    tips: { type: Type.STRING, description: "Tips" }
   },
   required: ["name", "usage", "warnings", "sideEffects", "tips"]
 };
@@ -65,23 +66,23 @@ const responseSchema: Schema = {
       type: Type.STRING, 
       enum: [AnalysisType.REPORT, AnalysisType.MEDICATION, AnalysisType.UNKNOWN],
     },
-    summary: { type: Type.STRING, description: "Reassuring summary of findings." },
+    summary: { type: Type.STRING, description: "Brief summary." },
     indicators: { 
       type: Type.ARRAY, 
       items: indicatorSchema,
-      description: "List of extracted indicators"
+      description: "List of indicators"
     },
     medication: {
       type: Type.OBJECT,
       ...medicationSchema,
-      description: "Medication details"
+      description: "Medication info"
     },
     questionsForDoctor: { 
       type: Type.ARRAY, 
       items: { type: Type.STRING },
-      description: "Questions to ask doctor." 
+      description: "3-5 Questions to ask doctor." 
     },
-    disclaimer: { type: Type.STRING, description: "Strict disclaimer." }
+    disclaimer: { type: Type.STRING, description: "Disclaimer." }
   },
   required: ["type", "summary", "questionsForDoctor", "disclaimer"]
 };
@@ -103,16 +104,14 @@ export const analyzeMedicalImage = async (
     3. Translate complex jargon into simple language.
     4. Context: Age ${context?.age || 'N/A'}, Gender ${context?.gender || 'N/A'}, Condition ${context?.condition || 'N/A'}.
     5. Output Language: ${languageName}.
-    6. **BE CONCISE**: Keep explanations short (under 30 words) to ensure the response fits within limits.
+    6. **EXTREMELY CONCISE**: Keep explanations UNDER 15 WORDS. This is vital to prevent response truncation.
     
     ANALYSIS LOGIC:
     - Multi-page support: Merge info from all images.
     - REPORTS: 
-      - Extract 'valueNumber' (numeric) and 'unit'. 
-      - Extract 'referenceRange' (min/max numeric) if available.
-      - **CRITICAL**: If the report has columns for historical data (e.g., "Last Visit", "2023/12/01"), extract them into the 'history' array for that indicator.
+      - Extract 'valueNumber', 'unit', 'referenceRange'. 
+      - Extract 'history' column data if present.
     - MEDICATION: Summarize usage, warnings.
-    - UNKNOWN: If content is unclear.
   `;
 
   try {
@@ -129,7 +128,7 @@ export const analyzeMedicalImage = async (
         parts: [
           ...imageParts,
           {
-            text: `Analyze these images. Extract structured data including numeric values, ranges, and any historical comparisons found in the table rows. Please respond in ${languageName}.`
+            text: `Analyze images. Extract structured data. Respond in ${languageName}.`
           }
         ]
       },
@@ -138,7 +137,7 @@ export const analyzeMedicalImage = async (
         responseMimeType: "application/json",
         responseSchema: responseSchema,
         temperature: 0.1,
-        maxOutputTokens: 8192, // Explicitly increase output token limit to prevent JSON truncation
+        maxOutputTokens: 16384, // Increased limit for supported models
       }
     });
 
@@ -147,24 +146,43 @@ export const analyzeMedicalImage = async (
       throw new Error("No response from AI");
     }
 
-    // Improve cleanup to handle cases where model might output Markdown fences despite JSON mime type
     const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
     try {
       return JSON.parse(cleanedText) as AnalysisResult;
     } catch (parseError) {
       console.error("JSON Parse Error:", parseError);
-      console.log("Raw Text Length:", cleanedText.length);
-      // If the text is very long, it likely got truncated.
-      if (cleanedText.length > 50000) {
+      console.log("Raw Text:", cleanedText.substring(cleanedText.length - 100)); // Log end of string
+
+      // Attempt BASIC repair for truncated JSON
+      // If it ends with something looking like an open array or object inside indicators, try to close it.
+      // This is a last-ditch effort.
+      try {
+        let fixedText = cleanedText;
+        // If it looks like it was cut off in the indicators array
+        if (fixedText.lastIndexOf('}]') === -1 && fixedText.includes('"indicators": [')) {
+            // Find the last closing brace of an item
+            const lastItemEnd = fixedText.lastIndexOf('}');
+            if (lastItemEnd > fixedText.indexOf('"indicators": [')) {
+                // Cut off everything after the last valid item and close the array and object
+                fixedText = fixedText.substring(0, lastItemEnd + 1) + '] }';
+                console.log("Attempting to repair JSON...");
+                return JSON.parse(fixedText) as AnalysisResult;
+            }
+        }
+      } catch (repairError) {
+        console.error("JSON Repair Failed:", repairError);
+      }
+
+      if (cleanedText.length > 10000) {
         throw new Error(language === 'zh' 
-          ? "报告内容过多，无法一次性分析。请尝试分批上传（例如每次1-2张图片）。"
-          : "The report is too long to analyze at once. Please try uploading fewer pages (e.g., 1-2 pages at a time)."
+          ? "报告内容极长，分析结果被截断。建议您分批上传图片（每次1-2张）以获得完整结果。"
+          : "The report is too long and the result was truncated. Please try uploading fewer pages (1-2 at a time)."
         );
       }
       throw new Error(language === 'zh'
-        ? "数据解析失败，请确保图片清晰或稍后重试。"
-        : "Failed to parse analysis data. Please ensure images are clear or try again."
+        ? "数据解析失败 (JSON Error)，请确保图片清晰或稍后重试。"
+        : "Failed to parse analysis data (JSON Error). Please ensure images are clear or try again."
       );
     }
 
@@ -183,31 +201,26 @@ export const sendChatMessage = async (
   const languageName = language === 'en' ? 'ENGLISH' : 'CHINESE (Simplified)';
 
   const systemInstruction = `
-    You are a helpful, empathetic medical assistant. You are chatting with a user about their medical report.
+    You are a helpful, empathetic medical assistant. Chat with user about their report.
     
     CONTEXT:
-    The user has just uploaded a report with the following analysis:
-    ${JSON.stringify(analysisContext)}
+    Analysis: ${JSON.stringify(analysisContext).substring(0, 10000)} ... (truncated if too long)
 
     RULES:
-    1. Answer questions based specifically on the provided analysis context.
-    2. If the user asks about something not in the report, give a general answer but clarify it's not in their report.
-    3. DO NOT diagnose or prescribe. Always advise consulting a doctor for specific medical decisions.
-    4. Keep answers concise, encouraging, and easy to understand.
-    5. Respond in ${languageName}.
+    1. Answer based on context.
+    2. DO NOT diagnose.
+    3. Keep answers concise.
+    4. Respond in ${languageName}.
   `;
 
   try {
-    // Limit history to last 10 messages to prevent token overflow
-    const recentHistory = history.slice(-10);
+    const recentHistory = history.slice(-6); // Reduced history context
 
-    // Map internal history to Gemini format
     const contents = recentHistory.map(msg => ({
       role: msg.role,
       parts: [{ text: msg.content }]
     }));
 
-    // Add new message
     contents.push({
       role: 'user',
       parts: [{ text: newMessage }]

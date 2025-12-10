@@ -33,13 +33,16 @@ const ChatAssistant: React.FC<Props> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const t = translations[lang];
 
   // Auto-scroll to bottom when messages change
+  // Use scrollTop instead of scrollIntoView to prevent page-level scrolling
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages, isLoading]);
 
   // Sync with initialMessages if they change externally (e.g. switching history items)
@@ -147,7 +150,10 @@ const ChatAssistant: React.FC<Props> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50"
+      >
         {messages.length === 0 && (
           <div className="text-center text-gray-400 my-8 space-y-2">
             <Bot size={32} className="mx-auto text-teal-200" />
@@ -190,7 +196,6 @@ const ChatAssistant: React.FC<Props> = ({
              </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Suggested Questions (Quick Ask) */}

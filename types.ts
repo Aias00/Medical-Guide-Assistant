@@ -1,3 +1,4 @@
+
 export enum AnalysisType {
   REPORT = 'REPORT',
   MEDICATION = 'MEDICATION',
@@ -82,4 +83,5 @@ export interface HistoryItem {
   thumbnail?: string; // Optional: save a tiny thumbnail for the list
   summary?: string; // Optional error message or summary
   chatHistory?: ChatMessage[]; // Persisted chat conversation
+  originalImages?: string[]; // Persist original full-res images
 }
